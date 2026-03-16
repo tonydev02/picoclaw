@@ -73,17 +73,18 @@ func turnStateFromContext(ctx context.Context) *turnState {
 }
 
 type turnState struct {
-	ctx            context.Context
-	cancelFunc     context.CancelFunc // Used to cancel all children when this turn finishes
-	turnID         string
-	parentTurnID   string
-	depth          int
-	childTurnIDs   []string
-	pendingResults chan *tools.ToolResult
-	session        session.SessionStore
-	mu             sync.Mutex
-	isFinished     bool // Marks if the parent Turn has ended
-	concurrencySem chan struct{} // Limits concurrent child sub-turns
+	ctx                  context.Context
+	cancelFunc           context.CancelFunc // Used to cancel all children when this turn finishes
+	turnID               string
+	parentTurnID         string
+	depth                int
+	childTurnIDs         []string
+	pendingResults       chan *tools.ToolResult
+	session              session.SessionStore
+	initialHistoryLength int  // Snapshot of session history length at turn start, for rollback on hard abort
+	mu                   sync.Mutex
+	isFinished           bool // Marks if the parent Turn has ended
+	concurrencySem       chan struct{} // Limits concurrent child sub-turns
 }
 
 // ====================== Helper Functions ======================

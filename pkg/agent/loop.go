@@ -966,12 +966,13 @@ func (al *AgentLoop) runAgentLoop(
 ) (string, error) {
 	// Initialize a root TurnState for this iteration, allowing sub-turns to be spawned.
 	rootTS := &turnState{
-		ctx:            ctx,
-		turnID:         opts.SessionKey, // Associate this turn graph with the current session key
-		depth:          0,
-		session:        agent.Sessions,
-		pendingResults: make(chan *tools.ToolResult, 16),
-		concurrencySem: make(chan struct{}, 5), // maxConcurrentSubTurns
+		ctx:                  ctx,
+		turnID:               opts.SessionKey, // Associate this turn graph with the current session key
+		depth:                0,
+		session:              agent.Sessions,
+		initialHistoryLength: len(agent.Sessions.GetHistory("")), // Snapshot for rollback on hard abort
+		pendingResults:       make(chan *tools.ToolResult, 16),
+		concurrencySem:       make(chan struct{}, 5), // maxConcurrentSubTurns
 	}
 	ctx = withTurnState(ctx, rootTS)
 

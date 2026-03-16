@@ -249,10 +249,24 @@ func (al *AgentLoop) HardAbort(sessionKey string) error {
 	}
 
 	logger.InfoCF("agent", "Hard abort triggered", map[string]any{
-		"session_key": sessionKey,
-		"turn_id":     ts.turnID,
-		"depth":       ts.depth,
+		"session_key":            sessionKey,
+		"turn_id":                ts.turnID,
+		"depth":                  ts.depth,
+		"initial_history_length": ts.initialHistoryLength,
 	})
+
+	// Rollback session history to the state before this turn started
+	if ts.session != nil {
+		currentHistory := ts.session.GetHistory("")
+		if len(currentHistory) > ts.initialHistoryLength {
+			logger.InfoCF("agent", "Rolling back session history", map[string]any{
+				"from": len(currentHistory),
+				"to":   ts.initialHistoryLength,
+			})
+			// SetHistory with the truncated slice to rollback
+			ts.session.SetHistory("", currentHistory[:ts.initialHistoryLength])
+		}
+	}
 
 	// Trigger cascading cancellation to all child SubTurns
 	ts.Finish()

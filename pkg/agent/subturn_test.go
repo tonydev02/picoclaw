@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/tools"
 )
 
@@ -442,5 +443,60 @@ func TestHardAbortCascading(t *testing.T) {
 	err = al.HardAbort("non-existent-session")
 	if err == nil {
 		t.Error("expected error for non-existent session")
+	}
+}
+
+// TestHardAbortSessionRollback verifies that HardAbort rolls back session history
+// to the state before the turn started, discarding all messages added during the turn.
+func TestHardAbortSessionRollback(t *testing.T) {
+	al, _, _, _, cleanup := newTestAgentLoop(t)
+	defer cleanup()
+
+	// Create a session with initial history
+	sess := &ephemeralSessionStore{
+		history: []providers.Message{
+			{Role: "user", Content: "initial message 1"},
+			{Role: "assistant", Content: "initial response 1"},
+		},
+	}
+
+	// Create a root turnState with initialHistoryLength = 2
+	rootTS := &turnState{
+		ctx:                  context.Background(),
+		turnID:               "test-session",
+		depth:                0,
+		session:              sess,
+		initialHistoryLength: 2, // Snapshot: 2 messages
+		pendingResults:       make(chan *tools.ToolResult, 16),
+		concurrencySem:       make(chan struct{}, 5),
+	}
+
+	// Register the turn state
+	al.activeTurnStates.Store("test-session", rootTS)
+
+	// Simulate adding messages during the turn (e.g., user input + assistant response)
+	sess.AddMessage("", "user", "new user message")
+	sess.AddMessage("", "assistant", "new assistant response")
+
+	// Verify history grew to 4 messages
+	if len(sess.GetHistory("")) != 4 {
+		t.Fatalf("expected 4 messages before abort, got %d", len(sess.GetHistory("")))
+	}
+
+	// Trigger HardAbort
+	err := al.HardAbort("test-session")
+	if err != nil {
+		t.Fatalf("HardAbort failed: %v", err)
+	}
+
+	// Verify history rolled back to initial 2 messages
+	finalHistory := sess.GetHistory("")
+	if len(finalHistory) != 2 {
+		t.Errorf("expected history to rollback to 2 messages, got %d", len(finalHistory))
+	}
+
+	// Verify the content matches the initial state
+	if finalHistory[0].Content != "initial message 1" || finalHistory[1].Content != "initial response 1" {
+		t.Error("history content does not match initial state after rollback")
 	}
 }
